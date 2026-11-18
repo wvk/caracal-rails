@@ -27,7 +27,14 @@ module Caracal
         ActiveSupport.on_load(:action_controller_base) do
           ActionController::Renderers.add :docx do |name, options|
             filename    = options.delete(:filename) || "#{ File.basename(name.to_s) }.docx"
-            disposition = options.delete(:disposition) || :attachment
+            disposition = (options.delete(:disposition) || :attachment).to_s
+
+            # Rails writes the disposition into the header as it is. Taking the
+            # two types alone keeps a value from the request, such as
+            # params[:disposition], from adding parameters or lines to it.
+            unless %w[attachment inline].include?(disposition.downcase)
+              raise ArgumentError, "render docx: takes disposition: :attachment or :inline, got #{ disposition.inspect }"
+            end
 
             # Rails before 8.0 has already set :template and :prefixes from the
             # action; render_to_string sets them from name, as render does.

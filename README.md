@@ -36,7 +36,7 @@ Design your controller normally and respond to the `docx` format:
 `render docx: 'show'` renders `show.docx.caracal` from the controller's view directory, as `render :show` does; a name with a slash, such as `'shared/cover'`, names a template by its path below `app/views`. The response's `Content-Type` is the DOCX type without a charset, and two options set its `Content-Disposition`, which Rails writes as `send_data` does:
 
 - `filename:` defaults to the template's name with `.docx`, such as `show.docx`. A name outside ASCII such as `Bericht März.docx` gets the parameter `filename*=UTF-8''Bericht%20M%C3%A4rz.docx` next to the ASCII fallback `filename="Bericht Marz.docx"`.
-- `disposition:` defaults to `:attachment`; `disposition: :inline` sends `inline` instead.
+- `disposition:` defaults to `:attachment`; `disposition: :inline` sends `inline` instead. Any other value raises an `ArgumentError`, so `disposition: params[:disposition]` adds nothing else to the header.
 
 Then add a view file with the Caracal extension:
 
