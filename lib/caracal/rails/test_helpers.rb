@@ -89,10 +89,14 @@ module Caracal
       # Text, tabs and line breaks; page and column breaks add no text.
       CONTENT = './/w:r/w:t | .//w:r/w:tab | .//w:r/w:br[not(@w:type) or @w:type = "textWrapping"]'
 
+      # A parameter of a Content-Disposition: its name, then its value as a
+      # quoted string or as a token.
+      PARAMETER = /(?:\A|;)\s*([^=;\s"]+)\s*=\s*(?:"((?:\\.|[^"\\])*)"|([^;]*))/
+
       NotDocx = Class.new(StandardError)
 
       def initialize(docx)
-        @response = docx if docx.respond_to?(:body)
+        @response = docx if docx.respond_to?(:body) && docx.respond_to?(:media_type)
         @body     = @response ? @response.body : docx
       end
 
@@ -120,6 +124,9 @@ module Caracal
 
       def document_xml
         @document_xml ||= begin
+          unless @body.is_a?(String)
+            raise NotDocx, "got #{ @body.nil? ? 'nil' : "an instance of #{ @body.class }" }; the helpers read a response or a String"
+          end
           raise NotDocx, 'the body is empty' if @body.empty?
 
           zip   = Zip::File.open_buffer(StringIO.new(@body))
@@ -161,13 +168,19 @@ module Caracal
       end
 
       # filename* (RFC 6266, encoded as RFC 5987 describes) when present,
-      # else filename.
+      # else filename. Reading whole parameters keeps text inside a quoted
+      # string from passing for a parameter.
       def filename_in(disposition)
-        if (match = disposition.match(/(?:\A|;)\s*filename\*\s*=\s*([^']*)'[^']*'([^;\s]*)/i))
-          URI.decode_uri_component(match[2], Encoding.find(match[1])).encode(Encoding::UTF_8)
-        elsif (match = disposition.match(/(?:\A|;)\s*filename\s*=\s*(?:"((?:\\.|[^"\\])*)"|([^;\s]*))/i))
-          match[1] ? match[1].gsub(/\\(.)/, '\1') : match[2]
+        parameters = {}
+        disposition.scan(PARAMETER) do |name, quoted, token|
+          parameters[name.downcase] ||= quoted ? quoted.gsub(/\\(.)/, '\1') : token.strip
         end
+        return parameters['filename'] unless parameters['filename*']
+
+        charset, _language, encoded = parameters['filename*'].split("'", 3)
+        URI.decode_uri_component(encoded.to_s, Encoding.find(charset.to_s)).encode(Encoding::UTF_8)
+      rescue ArgumentError, EncodingError => e
+        raise NotDocx, "the filename* of the Content-Disposition cannot be decoded (#{ e.message }): #{ disposition }"
       end
     end
   end
