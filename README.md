@@ -82,6 +82,84 @@ Inside your view, simply issue Caracal commands on the document object:
 *See the [Caracal](https://github.com/wvk/caracal) library for more details.*  
 
 
+## Long documents and caching
+
+A view renders inside the request, so a document with many pages or images holds a server thread for the seconds it takes. The bytes also differ between renders of the same input, because every ZIP entry in the package carries the time of its render. An ETag computed from the body, such as the one `Rack::ETag` adds, therefore changes on every request.
+
+The examples below render in a job, and answer conditional requests and fill `Rails.cache` from the inputs of a document. They live in the dummy app in `spec/dummy`, and `spec/guide/long_documents_spec.rb` runs them.
+
+### Rendering in a job
+
+A job renders the view, keeps the result as an Active Storage attachment and mails the reader a link:
+
+    class Report < ApplicationRecord
+      has_one_attached :document
+    end
+
+    class ReportDocumentJob < ApplicationJob
+      def perform(report, recipient)
+        docx = ReportsController.render :show, formats: [:docx], assigns: { report: report }
+
+        report.document.attach io:           StringIO.new(docx),
+                               filename:     "report-#{report.id}.docx",
+                               content_type: Mime[:docx].to_s
+
+        ReportMailer.with(report: report, recipient: recipient).document_ready.deliver_later
+      end
+    end
+
+    class ReportMailer < ApplicationMailer
+      def document_ready
+        @report = params[:report]
+        mail to: params[:recipient], subject: "#{@report.title} is ready"
+      end
+    end
+
+with the mail's text in `app/views/report_mailer/document_ready.text.erb`:
+
+    <%= @report.title %> is ready for download:
+
+    <%= rails_blob_url @report.document, disposition: 'attachment' %>
+
+A controller action starts it with `ReportDocumentJob.perform_later(@report, recipient)` and answers at once.
+
+- `ReportsController.render` renders `reports/show.docx.caracal` outside a request. `assigns:` sets the instance variables the view reads, here `@report`. URL helpers in the view take their host from `Rails.application.routes.default_url_options`.
+- Attaching touches the report: `updated_at` and `cache_key_with_version` move to the time of the job. Cached pages that show the report pick up the new document that way, and the ETag and the cache key of the next section change with it. `Report.no_touching { report.document.attach … }` attaches and keeps the timestamp.
+- The blob URL opens the document for anyone who holds the link. For a document that needs an access check, mail a link to your own action, which checks access and then redirects to the blob.
+- A page that waits for the document can receive the link from the job as a Turbo Stream instead of a mail: `Turbo::StreamsChannel.broadcast_replace_to` from turbo-rails replaces a "being prepared" notice.
+
+### Conditional requests and `Rails.cache`
+
+A document served directly gets its ETag and its cache key from what goes into it, rather than from its bytes:
+
+    class ReportsController < ApplicationController
+      etag { I18n.locale }
+
+      def show
+        @report = Report.find(params[:id])
+        return unless stale?(@report)
+
+        docx = Rails.cache.fetch([@report.cache_key_with_version, template_digest, I18n.locale]) do
+          render_to_string :show
+        end
+        send_data docx, type: :docx, filename: "report-#{@report.id}.docx"
+      end
+
+      private
+
+      def template_digest
+        ActionView::Digestor.digest(name: 'reports/show', format: :docx, finder: lookup_context)
+      end
+    end
+
+- `stale?(@report)` sets ETag and Last-Modified from the record, and Rails adds a digest of the action's template to the ETag. A client that holds the current document receives `304 Not Modified`, and nothing renders.
+- `Rails.cache` keeps the bytes under the record's `cache_key_with_version`, the template's digest (the same `ActionView::Digestor` call Rails makes for the ETag) and everything else the view reads. Here that is the locale: the view translates its text with `t`. `etag { I18n.locale }` adds the locale to every ETag of the controller as well, so the ETag and the cache key change together.
+- Last-Modified carries the record's time alone. A client that revalidates by date only (`If-Modified-Since` without `If-None-Match`) receives `304` across a change of template or locale; browsers send both headers, and Rails then compares both. `stale?(etag: @report)` sends the ETag without Last-Modified.
+- A changed record or template gives a new key, and the old entry leaves the cache under the store's expiry policy. Documents of several megabytes need a cache store that holds entries of that size; Memcached's default item limit is 1 MB.
+
+[caracal-md](https://github.com/wvk/caracal-md) runs an external program for each diagram block it renders. Keeping those results in `Rails.cache` across renders is the subject of [#5](https://github.com/wvk/caracal-rails/issues/5) and [wvk/caracal-md#11](https://github.com/wvk/caracal-md/issues/11).
+
+
 ## Contributing
 
 1. Fork it ( https://github.com/wvk/caracal-rails/fork )

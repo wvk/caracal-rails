@@ -1,7 +1,11 @@
 require File.expand_path('../boot', __FILE__)
 
 require 'rails'
+require 'active_record/railtie'
+require 'active_storage/engine'
+require 'active_job/railtie'
 require 'action_controller/railtie'
+require 'action_mailer/railtie'
 require 'action_view/railtie'
 
 # Require the gems listed in Gemfile, including any gems
