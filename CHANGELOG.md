@@ -8,6 +8,7 @@
   * Continuous integration runs Ruby 3.2 to 4.0 against Rails 7.1 to 8.1. (@wvk)
   * The gem's homepage, source, changelog and issue links point to [wvk/caracal-rails](https://github.com/wvk/caracal-rails). (@wvk)
   * The README's new section "Long documents and caching" renders documents in Active Job into Active Storage, and answers conditional requests and fills `Rails.cache` from a document's inputs. The dummy app now loads Active Record (SQLite in memory), Active Storage, Active Job and Action Mailer, and `spec/guide/long_documents_spec.rb` runs the section's examples. (@wvk)
+  * `require 'caracal/rails/test_helpers'` adds test helpers for DOCX responses: the RSpec matcher `be_docx` with `.named(filename)`, the Minitest assertion `assert_docx response, filename:`, and `docx_text` and `docx_paragraphs`, which return the text of a document and its paragraphs with their style ids. They read a file name outside ASCII from `filename*`, and a failure names what they found. The README's new section "Testing" shows them, and the suite's request specs use them. (@wvk)
 
 
 #### v1.0.3

@@ -5,6 +5,7 @@ require File.expand_path("../dummy/config/environment", __FILE__)
 
 # Load the test stack
 require 'rspec/rails'
+require 'caracal/rails/test_helpers'
 
 # The dummy app's test database lives in memory; give it its tables.
 ActiveRecord::Schema.verbose = false

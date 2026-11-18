@@ -1,1 +1,3 @@
 docx.file_name 'test.docx'
+docx.h1 'Bericht März'
+docx.p  'Umsätze im März'
