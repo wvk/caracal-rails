@@ -176,6 +176,17 @@ describe Caracal::Rails::TestHelpers, type: :request do
       expect(docx_text(docx)).to eq "Clients\nACME GmbH\nWeb:\tacme.example\nName\nCity\n\n\nIn a frame"
     end
 
+    it 'read another part with part:' do
+      docx = Caracal::Document.render do |docx|
+        docx.header { |header| header.p 'ACME GmbH' }
+        docx.p 'Body text'
+      end
+
+      expect(docx_paragraphs(docx, part: 'word/header1.xml')).to eq [['Normal', 'ACME GmbH']]
+      expect(docx_text(docx, part: 'word/header1.xml')).to eq 'ACME GmbH'
+      expect { docx_text(docx, part: 'word/footer1.xml') }.to raise_error ArgumentError, %r{\Athe DOCX has no word/footer1.xml, only _rels/.rels, }
+    end
+
     it 'raise for what is no DOCX' do
       expect { docx_text('<!DOCTYPE html>') }.to raise_error ArgumentError, 'expected a DOCX, but the body is not a ZIP archive and starts with "<!DOCTYPE html>"'
     end

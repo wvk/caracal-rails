@@ -14,8 +14,8 @@ describe Caracal::Rails::TemplateHandler do
       let(:source)   { "docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n" }
       let(:actual)   { Caracal::Rails::TemplateHandler.call(template, source) }
 
-      it 'wraps the source in a document block that starts on its first line' do
-        expect(actual).to eq "Caracal::Document.render do |docx|; docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n\nend"
+      it 'wraps the source in a document block that hands it a DocumentWrapper and starts on its first line' do
+        expect(actual).to eq "Caracal::Document.render do |docx|; docx = Caracal::Rails::DocumentWrapper.new(docx); docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n\nend"
       end
 
       describe 'when the path is hostile' do
@@ -30,7 +30,7 @@ describe Caracal::Rails::TemplateHandler do
         let(:source) { %q{docx.p "#{ @client.name }'s report"} }
 
         it 'passes them through as code, as ERB does with the code in its tags' do
-          expect(actual).to eq %Q{Caracal::Document.render do |docx|; docx.p "\#{ @client.name }'s report"\nend}
+          expect(actual).to eq %Q{Caracal::Document.render do |docx|; docx = Caracal::Rails::DocumentWrapper.new(docx); docx.p "\#{ @client.name }'s report"\nend}
         end
 
         it 'produces source that parses as ruby' do

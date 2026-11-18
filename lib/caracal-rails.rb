@@ -1,4 +1,5 @@
 require 'caracal'
+require 'caracal/rails/document_wrapper'
 require 'caracal/rails/template_handler'
 require 'caracal/rails/version'
 require 'tilt'
