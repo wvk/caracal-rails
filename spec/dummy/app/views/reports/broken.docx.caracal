@@ -1,0 +1,3 @@
+docx.h1 'Broken'
+docx.p  'The next line calls a method that nil lacks.'
+docx.p  nil.title

@@ -4,6 +4,9 @@
   * Require caracal 2.0 from [wvk/caracal](https://github.com/wvk/caracal) and Ruby 3.2. caracal 2 is installed from GitHub; rubygems.org carries the 1.x line. (@wvk)
   * Require Rails 7.1, the oldest version CI tests. (@wvk)
 
+* Bug Fixes
+  * The template handler compiles a view from the source Rails passes it, wrapped in `Caracal::Document.render do |docx|` as `Tilt::CaracalTemplate` wraps it, where it compiled to `Tilt.new(path).render(self)`. Views now read the `locals:` passed to `render` and render from resolvers other than the file system, such as `ActionView::FixtureResolver`. Rails compiles a view once and renders it again without reading its file, where Tilt read and compiled the file on every render. An error on line N of a view reports line N, where Tilt reported N + 1. The template path no longer appears in the generated code. (@wvk)
+
 * Enhancements
   * Continuous integration runs Ruby 3.2 to 4.0 against Rails 7.1 to 8.1. (@wvk)
   * The gem's homepage, source, changelog and issue links point to [wvk/caracal-rails](https://github.com/wvk/caracal-rails). (@wvk)
