@@ -1,0 +1,3 @@
+<%= @report.title %> is ready for download:
+
+<%= rails_blob_url @report.document, disposition: 'attachment' %>

@@ -6,6 +6,10 @@ require File.expand_path("../dummy/config/environment", __FILE__)
 # Load the test stack
 require 'rspec/rails'
 
+# The dummy app's test database lives in memory; give it its tables.
+ActiveRecord::Schema.verbose = false
+load File.expand_path('../dummy/db/schema.rb', __FILE__)
+
 # Requires supporting ruby files with custom matchers and macros, etc,
 # in spec/support/ and its subdirectories.
 Dir[Rails.root.join("spec/support/**/*.rb")].each { |f| require f }

@@ -1,0 +1,4 @@
+de:
+  reports:
+    show:
+      changed: "Zuletzt geändert am %{date}"

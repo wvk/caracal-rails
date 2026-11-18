@@ -21,7 +21,8 @@ tmp
 *.a
 mkmf.log
 gemfiles/*.gemfile.lock
-spec/dummy/db
+spec/dummy/db/*
+!spec/dummy/db/schema.rb
 spec/dummy/log
 spec/dummy/tmp
 /vendor/
