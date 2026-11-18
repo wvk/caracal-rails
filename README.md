@@ -126,6 +126,7 @@ The document holds the report's title, followed by a heading and a paragraph for
 - Rails renders a `spacer_template:` once, ahead of the items. To separate the items, start the item's partial with e.g. `docx.hr unless client_iteration.first?`.
 - Render collections without `cached: true`. Rails caches the empty String an item's partial returns, so an item read from the cache adds nothing to the document.
 - Rails renders a view before its layout, so a `.docx.caracal` layout renders a document of its own, which takes the place of the view's. Shared headers, footers and styles go into a partial.
+- A partial's `layout:` renders after its partial too, so `render partial: 'inner', layout: 'box'` adds the commands of `_box` behind those of `_inner`. With a block, `render(layout: 'box') { docx.p 'Inside' }`, the block runs where `_box` yields.
 - A `.docx.caracal` partial rendered outside a `.docx.caracal` view, such as from an HTML view or with `render_to_string(partial: …)`, renders a document of its own and returns the DOCX.
 
 

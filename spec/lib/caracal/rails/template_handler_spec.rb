@@ -133,6 +133,33 @@ describe Caracal::Rails::TemplateHandler do
         end
       end
 
+      # reports/_inner.docx.caracal is the dummy app's.
+      describe 'with a layout around a partial or a block' do
+        let(:resolver) do
+          ActionView::FixtureResolver.new(
+            'reports/_box.docx.caracal'        => "docx.p 'Top'\nyield\ndocx.p 'Bottom'",
+            'reports/boxed.docx.caracal'       => "render partial: 'reports/inner', layout: 'reports/box'",
+            'reports/boxed_block.docx.caracal' => "render(layout: 'reports/box') { docx.p 'Inside' }"
+          )
+        end
+
+        around do |example|
+          view_paths = ApplicationController.view_paths
+          ApplicationController.prepend_view_path(resolver)
+          example.run
+        ensure
+          ApplicationController.view_paths = view_paths
+        end
+
+        it "adds the commands of a partial's layout behind those of the partial" do
+          expect(docx_text(render_docx('reports/boxed'))).to eq "Inner\nTop\nBottom"
+        end
+
+        it 'runs a block where its layout yields' do
+          expect(docx_text(render_docx('reports/boxed_block'))).to eq "Top\nInside\nBottom"
+        end
+      end
+
       # The view context renders as a view of another format, such as HTML,
       # does.
       describe 'outside a .docx.caracal view' do
