@@ -28,10 +28,15 @@ Design your controller normally and respond to the `docx` format:
         # collect your models/view models here
 
         respond_to do |format|
-          format.docx { headers["Content-Disposition"] = "attachment; filename=\"caracal.docx\"" }
+          format.docx { render docx: 'show', filename: 'Quarterly Report.docx' }
         end
       end
     end
+
+`render docx: 'show'` renders `show.docx.caracal` from the controller's view directory, as `render :show` does; a name with a slash, such as `'shared/cover'`, names a template by its path below `app/views`. The response's `Content-Type` is the DOCX type without a charset, and two options set its `Content-Disposition`, which Rails writes as `send_data` does:
+
+- `filename:` defaults to the template's name with `.docx`, such as `show.docx`. A name outside ASCII such as `Bericht März.docx` gets the parameter `filename*=UTF-8''Bericht%20M%C3%A4rz.docx` next to the ASCII fallback `filename="Bericht Marz.docx"`.
+- `disposition:` defaults to `:attachment`; `disposition: :inline` sends `inline` instead. Any other value raises an `ArgumentError`, so `disposition: params[:disposition]` adds nothing else to the header.
 
 Then add a view file with the Caracal extension:
 
@@ -151,6 +156,7 @@ with the mail's text in `app/views/report_mailer/document_ready.text.erb`:
 A controller action starts it with `ReportDocumentJob.perform_later(@report, recipient)` and answers at once.
 
 - `ReportsController.render` renders `reports/show.docx.caracal` outside a request. `assigns:` sets the instance variables the view reads, here `@report`. URL helpers in the view take their host from `Rails.application.routes.default_url_options`.
+- Attaching touches the report: `updated_at` and `cache_key_with_version` move to the time of the job. Cached pages that show the report pick up the new document that way, and the ETag and the cache key of the next section change with it. `Report.no_touching { report.document.attach … }` attaches and keeps the timestamp.
 - The blob URL opens the document for anyone who holds the link. For a document that needs an access check, mail a link to your own action, which checks access and then redirects to the blob.
 - A page that waits for the document can receive the link from the job as a Turbo Stream instead of a mail: `Turbo::StreamsChannel.broadcast_replace_to` from turbo-rails replaces a "being prepared" notice.
 
@@ -180,6 +186,7 @@ A document served directly gets its ETag and its cache key from what goes into i
 
 - `stale?(@report)` sets ETag and Last-Modified from the record, and Rails adds a digest of the action's template to the ETag. A client that holds the current document receives `304 Not Modified`, and nothing renders.
 - `Rails.cache` keeps the bytes under the record's `cache_key_with_version`, the template's digest (the same `ActionView::Digestor` call Rails makes for the ETag) and everything else the view reads. Here that is the locale: the view translates its text with `t`. `etag { I18n.locale }` adds the locale to every ETag of the controller as well, so the ETag and the cache key change together.
+- Last-Modified carries the record's time alone. A client that revalidates by date only (`If-Modified-Since` without `If-None-Match`) receives `304` across a change of template or locale; browsers send both headers, and Rails then compares both. `stale?(etag: @report)` sends the ETag without Last-Modified.
 - A changed record or template gives a new key, and the old entry leaves the cache under the store's expiry policy. Documents of several megabytes need a cache store that holds entries of that size; Memcached's default item limit is 1 MB.
 
 [caracal-md](https://github.com/wvk/caracal-md) runs an external program for each diagram block it renders. Keeping those results in `Rails.cache` across renders is the subject of [#5](https://github.com/wvk/caracal-rails/issues/5) and [wvk/caracal-md#11](https://github.com/wvk/caracal-md/issues/11).

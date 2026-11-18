@@ -47,6 +47,11 @@ describe Caracal::Rails::TestHelpers, type: :request do
       expect(response_with(docx, 'Content-Disposition' => 'attachment; filename=report.docx')).to be_docx.named('report.docx')
     end
 
+    it 'reads text inside a quoted string as part of its parameter' do
+      expect(response_with(docx, 'Content-Disposition' => %q{attachment; filename="a; filename*=UTF-8''b.docx"})).to be_docx.named(%q{a; filename*=UTF-8''b.docx})
+      expect(response_with(docx, 'Content-Disposition' => %q{attachment; title="a; filename=b.docx"; filename=c.docx})).to be_docx.named('c.docx')
+    end
+
     it 'passes for a response without a file name, and for a String' do
       expect(response_with(docx)).to be_docx
       expect(docx).to be_docx
@@ -78,6 +83,18 @@ describe Caracal::Rails::TestHelpers, type: :request do
       expect { expect(response_with(docx)).to be_docx.named('a.docx') }.to fail_with 'expected a DOCX named "a.docx", but the response has no Content-Disposition header'
       expect { expect(response_with(docx, 'Content-Disposition' => 'inline')).to be_docx.named('a.docx') }.to fail_with 'expected a DOCX named "a.docx", but the Content-Disposition names no file: inline'
       expect { expect(docx).to be_docx.named('a.docx') }.to fail_with 'expected a DOCX named "a.docx", but got a String, which carries no file name'
+    end
+
+    it 'says that a filename* cannot be decoded' do
+      expect { expect(response_with(docx, 'Content-Disposition' => %q{attachment; filename*=latin9''a.docx})).to be_docx.named('a.docx') }.to fail_with \
+        %q{expected a DOCX named "a.docx", but the filename* of the Content-Disposition cannot be decoded (unknown encoding name - latin9): attachment; filename*=latin9''a.docx}
+      expect { expect(response_with(docx, 'Content-Disposition' => %q{attachment; filename*=UTF-8''%ZZ.docx})).to be_docx.named('a.docx') }.to fail_with \
+        %q{expected a DOCX named "a.docx", but the filename* of the Content-Disposition cannot be decoded (invalid %-encoding (%ZZ.docx)): attachment; filename*=UTF-8''%ZZ.docx}
+    end
+
+    it 'says what it got in place of a response or a String' do
+      expect { expect(nil).to be_docx }.to fail_with 'expected a DOCX, but got nil; the helpers read a response or a String'
+      expect { expect(report.document).to be_docx }.to fail_with 'expected a DOCX, but got an instance of ActiveStorage::Attached::One; the helpers read a response or a String'
     end
 
     it 'fails a 304 response' do
@@ -189,6 +206,8 @@ describe Caracal::Rails::TestHelpers, type: :request do
 
     it 'raise for what is no DOCX' do
       expect { docx_text('<!DOCTYPE html>') }.to raise_error ArgumentError, 'expected a DOCX, but the body is not a ZIP archive and starts with "<!DOCTYPE html>"'
+      expect { docx_text(Mail.new.tap { |mail| mail.add_file filename: 'a.docx', content: docx }.attachments.first) }.to raise_error ArgumentError,
+        'expected a DOCX, but got an instance of Mail::Part; the helpers read a response or a String'
     end
   end
 end
