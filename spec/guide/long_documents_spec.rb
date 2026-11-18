@@ -80,6 +80,17 @@ describe 'Long documents and caching' do
       expect(document_xml(response.body)).to include 'Zuletzt geändert am'
       expect(Caracal::Document).to have_received(:render).twice
     end
+
+    it 'answers If-Modified-Since alone from the time of the record, in any locale' do
+      get "/reports/#{report.id}.docx"
+      last_modified = response.headers['Last-Modified']
+
+      I18n.with_locale(:de) do
+        get "/reports/#{report.id}.docx", headers: { 'If-Modified-Since' => last_modified }
+      end
+
+      expect(response).to have_http_status(:not_modified)
+    end
   end
 
   #--------------------------------------------------------
@@ -109,6 +120,24 @@ describe 'Long documents and caching' do
       expect(mail.to).to eq ['reader@example.com']
       expect(mail.subject).to eq 'Quarterly Report is ready'
       expect(mail.body.to_s).to include 'http://example.com/rails/active_storage/blobs/redirect/'
+    end
+
+    it 'touches the record as it attaches' do
+      report.update_columns(updated_at: 2.days.ago)
+
+      expect { ReportDocumentJob.perform_now(report, 'reader@example.com') }
+        .to change { report.reload.cache_key_with_version }
+    end
+
+    it 'keeps the time of the record when the attach runs in no_touching' do
+      report.update_columns(updated_at: 2.days.ago)
+
+      expect {
+        Report.no_touching do
+          report.document.attach io: StringIO.new('docx'), filename: 'report.docx', content_type: Mime[:docx].to_s
+        end
+      }.not_to change { report.reload.updated_at }
+      expect(report.document).to be_attached
     end
   end
 end
