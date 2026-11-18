@@ -14,8 +14,8 @@ describe Caracal::Rails::TemplateHandler do
       let(:source)   { "docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n" }
       let(:actual)   { Caracal::Rails::TemplateHandler.call(template, source) }
 
-      it 'wraps the source in a document block that hands it a DocumentWrapper and starts on its first line' do
-        expect(actual).to eq "Caracal::Document.render do |docx|; docx = Caracal::Rails::DocumentWrapper.new(docx); docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n\nend"
+      it 'wraps the source in a block that render calls with docx and starts on its first line' do
+        expect(actual).to eq "Caracal::Rails::TemplateHandler.render(self) do |docx|; docx.h1 'Quarterly Report'\ndocx.p 'Lorem ipsum'\n\nend"
       end
 
       describe 'when the path is hostile' do
@@ -30,7 +30,7 @@ describe Caracal::Rails::TemplateHandler do
         let(:source) { %q{docx.p "#{ @client.name }'s report"} }
 
         it 'passes them through as code, as ERB does with the code in its tags' do
-          expect(actual).to eq %Q{Caracal::Document.render do |docx|; docx = Caracal::Rails::DocumentWrapper.new(docx); docx.p "\#{ @client.name }'s report"\nend}
+          expect(actual).to eq %Q{Caracal::Rails::TemplateHandler.render(self) do |docx|; docx.p "\#{ @client.name }'s report"\nend}
         end
 
         it 'produces source that parses as ruby' do
@@ -95,7 +95,91 @@ describe Caracal::Rails::TemplateHandler do
         expect(docx_paragraphs(render_docx('reports/fixture'))).to eq [['Heading1', 'From fixture']]
       end
     end
-    
+
+    # The views are in spec/dummy/app/views.
+    describe 'views rendered inside a view' do
+      it 'adds a partial to the document of the view, and the partial returns an empty String' do
+        expect(docx_paragraphs(render_docx('reports/outer'))).to eq [
+          ['Heading1', 'Outer'],
+          ['Normal',   'Inner'],
+          ['Normal',   'partial returned String of 0 bytes']
+        ]
+      end
+
+      it 'adds a section per item of a collection, with the item as its local' do
+        client = Struct.new(:name, :city)
+        docx   = render_docx('reports/clients', locals: { clients: [client.new('ACME GmbH', 'Kiel'), client.new('Beta AG', 'Hamburg')] })
+
+        expect(docx_paragraphs(docx)).to eq [
+          ['Heading1', 'Clients'],
+          ['Heading2', 'ACME GmbH'], ['Normal', 'Kiel'],
+          ['Heading2', 'Beta AG'],   ['Normal', 'Hamburg']
+        ]
+      end
+
+      it 'adds a template rendered with render template: to the document' do
+        expect(docx_paragraphs(render_docx('reports/combined'))).to eq [['Heading1', 'Included'], ['Normal', 'After the template']]
+      end
+
+      describe 'in header and frame blocks' do
+        let(:docx) { render_docx('offers/partials', locals: { number: '2026-118' }) }
+
+        it 'adds a partial rendered in a header block to the header, with the partials it renders' do
+          expect(docx_text(docx, part: 'word/header1.xml')).to eq "ACME GmbH\nKiel"
+        end
+
+        it 'adds a partial rendered in a frame block to the frame' do
+          expect(docx_paragraphs(docx)).to eq [[nil, ''], ['Normal', 'Offer 2026-118'], ['Normal', 'Body text']]
+        end
+      end
+
+      # reports/_inner.docx.caracal is the dummy app's.
+      describe 'with a layout around a partial or a block' do
+        let(:resolver) do
+          ActionView::FixtureResolver.new(
+            'reports/_box.docx.caracal'        => "docx.p 'Top'\nyield\ndocx.p 'Bottom'",
+            'reports/boxed.docx.caracal'       => "render partial: 'reports/inner', layout: 'reports/box'",
+            'reports/boxed_block.docx.caracal' => "render(layout: 'reports/box') { docx.p 'Inside' }"
+          )
+        end
+
+        around do |example|
+          view_paths = ApplicationController.view_paths
+          ApplicationController.prepend_view_path(resolver)
+          example.run
+        ensure
+          ApplicationController.view_paths = view_paths
+        end
+
+        it "adds the commands of a partial's layout behind those of the partial" do
+          expect(docx_text(render_docx('reports/boxed'))).to eq "Inner\nTop\nBottom"
+        end
+
+        it 'runs a block where its layout yields' do
+          expect(docx_text(render_docx('reports/boxed_block'))).to eq "Top\nInside\nBottom"
+        end
+      end
+
+      # The view context renders as a view of another format, such as HTML,
+      # does.
+      describe 'outside a .docx.caracal view' do
+        let(:view) { ApplicationController.new.view_context }
+
+        it 'renders a partial into a document of its own' do
+          expect(docx_paragraphs(view.render(partial: 'reports/inner', formats: [:docx]))).to eq [['Normal', 'Inner']]
+        end
+
+        it 'starts a new document after an exception in a partial' do
+          # Line 2 of reports/_failing.docx.caracal raises.
+          expect { view.render(template: 'reports/failing', formats: [:docx]) }.to raise_error(ActionView::Template::Error, 'no data') { |error|
+            expect(error.backtrace.first).to start_with "#{ Rails.root }/app/views/reports/_failing.docx.caracal:2:"
+          }
+
+          expect(docx_text(view.render(template: 'reports/outer', formats: [:docx]))).to eq "Outer\nInner\npartial returned String of 0 bytes"
+        end
+      end
+    end
+
   end
   
 end

@@ -1,0 +1,2 @@
+docx.p 'Before the error'
+raise ArgumentError, 'no data'

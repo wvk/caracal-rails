@@ -1,0 +1,2 @@
+render template: 'reports/locals', locals: { title: 'Included' }
+docx.p 'After the template'
