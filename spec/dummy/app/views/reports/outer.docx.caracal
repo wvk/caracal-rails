@@ -1,0 +1,3 @@
+docx.h1 'Outer'
+result = render(partial: 'reports/inner')
+docx.p "partial returned #{result.class} of #{result.to_s.bytesize} bytes"

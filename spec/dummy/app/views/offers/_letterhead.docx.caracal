@@ -1,0 +1,2 @@
+docx.p 'ACME GmbH', bold: true
+render 'offers/address'

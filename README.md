@@ -108,6 +108,26 @@ In a view, `docx` sends the commands that add content to the header, footer or f
 
 `docx` is a `Caracal::Rails::DocumentWrapper`, and `docx.document` returns the `Caracal::Document`. [wvk/caracal#62](https://github.com/wvk/caracal/issues/62) proposes the same behaviour for caracal itself.
 
+### Partials and collections
+
+Partials, collections and templates that a view renders add to the view's document. They issue their commands on the view's `docx`, and `render` returns an empty String:
+
+    # app/views/reports/show.docx.caracal
+    docx.h1 @report.title
+    render partial: 'clients/summary', collection: @report.clients, as: :client
+
+    # app/views/clients/_summary.docx.caracal
+    docx.h2 client.name
+    docx.p  client.city
+
+The document holds the report's title, followed by a heading and a paragraph for each client.
+
+- A partial rendered in a header, footer or frame block adds to that header, footer or frame: `docx.header { |h| render 'offers/letterhead' }`. Give the block a parameter. In a block without one, `render` raises a `NoMethodError`.
+- Rails renders a `spacer_template:` once, ahead of the items. To separate the items, start the item's partial with e.g. `docx.hr unless client_iteration.first?`.
+- Render collections without `cached: true`. Rails caches the empty String an item's partial returns, so an item read from the cache adds nothing to the document.
+- Rails renders a view before its layout, so a `.docx.caracal` layout renders a document of its own, which takes the place of the view's. Shared headers, footers and styles go into a partial.
+- A `.docx.caracal` partial rendered outside a `.docx.caracal` view, such as from an HTML view or with `render_to_string(partial: …)`, renders a document of its own and returns the DOCX.
+
 
 ## Long documents and caching
 

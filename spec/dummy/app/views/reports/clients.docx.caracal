@@ -1,0 +1,2 @@
+docx.h1 'Clients'
+render partial: 'clients/summary', collection: clients, as: :client
