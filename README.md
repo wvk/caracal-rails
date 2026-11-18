@@ -2,7 +2,7 @@
 
 [Caracal](https://github.com/wvk/caracal) is a ruby library for dynamically creating professional-quality Microsoft Word documents.
 
-Caracal-Rails is a drop in solution for registering the Microsoft Word mime type and for establishing a template handler in Rails for the :docx format.  All caracal documents are rendered with an explicit block passing a reference to the Caracal::Document object named `docx`.
+Caracal-Rails is a drop in solution for registering the Microsoft Word mime type and for establishing a template handler in Rails for the :docx format.  All caracal documents are rendered with an explicit block passing the document as `docx`.
 
 Please see the [caracal-example](https://github.com/urvin-compliance/caracal-example) repository for
 a working demonstration of the library's capabilities.
@@ -85,6 +85,33 @@ Inside your view, simply issue Caracal commands on the document object:
 
 
 *See the [Caracal](https://github.com/wvk/caracal) library for more details.*  
+
+### Headers, footers and frames
+
+In a view, `docx` sends the commands that add content to the header, footer or frame whose block is running, else to the document body. A helper that receives `docx` therefore writes where its caller is:
+
+    # app/helpers/offers_helper.rb
+    module OffersHelper
+      def letterhead(docx)
+        docx.p 'ACME GmbH', bold: true
+      end
+    end
+
+    # app/views/offers/show.docx.caracal
+    docx.header { |h| letterhead(docx) }
+    docx.frame(width: 3600, height: 1440, x: 7200, y: 720) { |f| docx.p "Offer #{@offer.number}" }
+    docx.p 'Body text'
+
+"ACME GmbH" goes into the header, the offer number into the frame and "Body text" into the body.
+
+- The commands that add content are `p`, `h1` to `h6`, `table`, `img`, `ol`, `ul`, `hr`, `page`, `column_break`, `iframe`, `bookmark_start`, `bookmark_end`, `raw_xml` and `toc`. A frame takes paragraphs, headings, lists and tables, and headers and footers take all but `toc`; another command raises a `NoMethodError` while the block runs. Settings such as `docx.style`, `docx.font` and `docx.page_size` go to the document, inside a block too.
+- Open a frame inside a header or footer through `docx`: `docx.frame` in `docx.header { |h| … }` puts the frame into the header, and commands on `docx` in the frame's block go into the frame. A frame opened with `h.frame`, or with `frame` in a block without a parameter, is caracal's alone, and commands on `docx` in its block go into the header around it.
+- Give these blocks a parameter. A block without one runs inside the header, footer or frame, where the view's helpers and instance variables are out of reach: `letterhead` raises a `NoMethodError`, and `@offer` reads `nil`.
+- When a block raises an error, its header, footer or frame closes, so after a `rescue` the commands go to the body again.
+- `docx.header` and `docx.footer` without a block return the header or footer, as in caracal. The `header:` and `footer:` blocks of `docx.section` send the commands to the section's header and footer, and a section block with a parameter receives `docx`.
+- Caracal itself runs the Procs in a table's data, so `docx.p` in such a Proc goes to the body or the header around the table, ahead of it. Write to the cell with the Proc's parameter: `->(cell) { cell.p 'Text' }`.
+
+`docx` is a `Caracal::Rails::DocumentWrapper`, and `docx.document` returns the `Caracal::Document`. [wvk/caracal#62](https://github.com/wvk/caracal/issues/62) proposes the same behaviour for caracal itself.
 
 
 ## Long documents and caching
@@ -207,7 +234,8 @@ The same in a Minitest integration test:
 
 - `docx_paragraphs` returns the paragraphs of the document body as pairs of style id and text: `['Heading1', 'Quarterly Report']` for `docx.h1 'Quarterly Report'`, `['Normal', 'Lorem ipsum']` for `docx.p 'Lorem ipsum'`. It includes the paragraphs in tables and frames. A line break reads as `"\n"` and a tab as `"\t"`. A paragraph without a style of its own, such as the one holding a page break, has the style id `nil`.
 - `docx_text` joins the texts of those paragraphs with `"\n"`.
-- Both take a response or a String and read `word/document.xml`; headers, footers and footnotes are parts of their own. For a body that is no DOCX they raise an `ArgumentError`.
+- Both take a response or a String and read `word/document.xml`. For a body that is no DOCX they raise an `ArgumentError`.
+- `part:` reads another part of the package, e.g. `docx_text(response.body, part: 'word/header1.xml')`. Caracal writes the header and footer to `word/header1.xml` and `word/footer1.xml`, and those of the first page to `word/header2.xml` and `word/footer2.xml`. For a part the DOCX lacks, the helpers raise an `ArgumentError` that lists the parts it has.
 
 
 ## Contributing

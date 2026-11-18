@@ -17,14 +17,16 @@ module Caracal
     # The helpers take a response, or a DOCX as a String. The module holds
     # methods only, so test classes that include it keep their constants.
     module TestHelpers
-      # The text of the document body, one line per paragraph.
-      def docx_text(docx)
-        docx_paragraphs(docx).map(&:last).join("\n")
+      # The text of the document body, one line per paragraph. part: names
+      # another part of the package, such as 'word/header1.xml'.
+      def docx_text(docx, part: DocxReader::DOCUMENT)
+        docx_paragraphs(docx, part: part).map(&:last).join("\n")
       end
 
-      # The paragraphs of the document body as [style id, text] pairs.
-      def docx_paragraphs(docx)
-        DocxReader.new(docx).paragraphs
+      # The paragraphs of the document body as [style id, text] pairs. part:
+      # names another part of the package, such as 'word/header1.xml'.
+      def docx_paragraphs(docx, part: DocxReader::DOCUMENT)
+        DocxReader.new(docx).paragraphs(part)
       end
 
       # Passes for a response with the DOCX media type and a body that is a
@@ -77,14 +79,15 @@ module Caracal
     # Reads a response or a String as a DOCX, for TestHelpers.
     class DocxReader
       MEDIA_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      DOCUMENT   = 'word/document.xml'
       NAMESPACES = {
         'w'  => 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
         'mc' => 'http://schemas.openxmlformats.org/markup-compatibility/2006'
       }
 
-      # word/document.xml holds the text of a frame twice: in a text box,
-      # and in a VML copy under mc:Fallback for older readers.
-      PARAGRAPHS = '//w:body//w:p[not(ancestor::mc:Fallback)]'
+      # A part holds the text of a frame twice: in a text box, and in a VML
+      # copy under mc:Fallback for older readers.
+      PARAGRAPHS = '//w:p[not(ancestor::mc:Fallback)]'
 
       # Text, tabs and line breaks; page and column breaks add no text.
       CONTENT = './/w:r/w:t | .//w:r/w:tab | .//w:r/w:br[not(@w:type) or @w:type = "textWrapping"]'
@@ -100,8 +103,8 @@ module Caracal
         @body     = @response ? @response.body : docx
       end
 
-      def paragraphs
-        Nokogiri::XML(document_xml).xpath(PARAGRAPHS, NAMESPACES).map do |paragraph|
+      def paragraphs(part = DOCUMENT)
+        Nokogiri::XML(xml(part)).xpath(PARAGRAPHS, NAMESPACES).map do |paragraph|
           [paragraph.at_xpath('w:pPr/w:pStyle/@w:val', NAMESPACES)&.value, text(paragraph)]
         end
       rescue NotDocx => e
@@ -114,7 +117,7 @@ module Caracal
           return "the media type is #{ @response.media_type.inspect }"
         end
 
-        document_xml
+        zip
         filename_mismatch(filename) if filename
       rescue NotDocx => e
         e.message
@@ -122,21 +125,27 @@ module Caracal
 
       private
 
-      def document_xml
-        @document_xml ||= begin
+      def zip
+        @zip ||= begin
           unless @body.is_a?(String)
             raise NotDocx, "got #{ @body.nil? ? 'nil' : "an instance of #{ @body.class }" }; the helpers read a response or a String"
           end
           raise NotDocx, 'the body is empty' if @body.empty?
 
-          zip   = Zip::File.open_buffer(StringIO.new(@body))
-          entry = zip.find_entry('word/document.xml')
-          raise NotDocx, "the body is a ZIP archive without word/document.xml: #{ zip.entries.map(&:name).join(', ') }" unless entry
+          zip = Zip::File.open_buffer(StringIO.new(@body))
+          raise NotDocx, "the body is a ZIP archive without #{ DOCUMENT }: #{ zip.entries.map(&:name).join(', ') }" unless zip.find_entry(DOCUMENT)
 
-          entry.get_input_stream.read
+          zip
         rescue Zip::Error
           raise NotDocx, "the body is not a ZIP archive and starts with #{ @body.byteslice(0, 40).inspect }"
         end
+      end
+
+      def xml(part)
+        entry = zip.find_entry(part)
+        raise ArgumentError, "the DOCX has no #{ part }, only #{ zip.entries.map(&:name).join(', ') }" unless entry
+
+        entry.get_input_stream.read
       end
 
       # The paragraph's own text. The text of a frame anchored in it belongs

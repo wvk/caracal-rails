@@ -1,0 +1,8 @@
+begin
+  docx.header do |h|
+    letterhead(docx)
+    raise ArgumentError, 'no address'
+  end
+rescue ArgumentError
+end
+docx.p 'Body text'

@@ -1,0 +1,2 @@
+docx.header { |h| letterhead(docx) }
+docx.p 'Body text'

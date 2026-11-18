@@ -1,0 +1,6 @@
+docx.header do |h|
+  docx.frame(width: 3600, height: 1440, x: 7200, y: 720) { |f| letterhead(docx) }
+  docx.p 'Header text'
+end
+docx.frame(width: 3600, height: 1440) { |f| docx.p "Offer #{ number }" }
+docx.p 'Body text'
