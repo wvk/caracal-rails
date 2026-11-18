@@ -1,6 +1,6 @@
 # Caracal-Rails
 
-[Caracal](https://github.com/urvin-compliance/caracal) is a ruby library for dynamically creating professional-quality Microsoft Word documents.
+[Caracal](https://github.com/wvk/caracal) is a ruby library for dynamically creating professional-quality Microsoft Word documents.
 
 Caracal-Rails is a drop in solution for registering the Microsoft Word mime type and for establishing a template handler in Rails for the :docx format.  All caracal documents are rendered with an explicit block passing a reference to the Caracal::Document object named `docx`.
 
@@ -9,9 +9,10 @@ a working demonstration of the library's capabilities.
 
 ## Installation
 
-Add this line to your application's Gemfile:
+Caracal-Rails needs Ruby 3.2 or later and caracal 2, which is installed from GitHub. Add both to your application's Gemfile:
 
-    gem 'caracal-rails'
+    gem 'caracal', github: 'wvk/caracal', tag: 'v2.0.0'
+    gem 'caracal-rails', github: 'wvk/caracal-rails'
 
 Then execute:
 
@@ -78,12 +79,12 @@ Inside your view, simply issue Caracal commands on the document object:
     end
 
 
-*See the [Caracal](https://github.com/urvin-compliance/caracal) library for more details.*  
+*See the [Caracal](https://github.com/wvk/caracal) library for more details.*  
 
 
 ## Contributing
 
-1. Fork it ( https://github.com/urvin-compliance/caracal-rails/fork )
+1. Fork it ( https://github.com/wvk/caracal-rails/fork )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
@@ -104,4 +105,4 @@ A tip of the hat to the wonderful PDF generation libraries [Prawn](https://githu
 
 Copyright (c) 2014 Urvin LLC
 
-[MIT License](https://github.com/urvin-compliance/caracal-rails/blob/master/LICENSE.txt)
+[MIT License](https://github.com/wvk/caracal-rails/blob/master/LICENSE.txt)

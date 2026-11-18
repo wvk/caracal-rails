@@ -1,3 +1,14 @@
+#### v2.0.0
+
+* Breaking changes
+  * Require caracal 2.0 from [wvk/caracal](https://github.com/wvk/caracal) and Ruby 3.2. caracal 2 is installed from GitHub; rubygems.org carries the 1.x line. (@wvk)
+  * Require Rails 7.1, the oldest version CI tests. (@wvk)
+
+* Enhancements
+  * Continuous integration runs Ruby 3.2 to 4.0 against Rails 7.1 to 8.1. (@wvk)
+  * The gem's homepage, source, changelog and issue links point to [wvk/caracal-rails](https://github.com/wvk/caracal-rails). (@wvk)
+
+
 #### v1.0.3
 
 * Security
