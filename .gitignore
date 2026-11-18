@@ -24,3 +24,5 @@ gemfiles/*.gemfile.lock
 spec/dummy/db
 spec/dummy/log
 spec/dummy/tmp
+/vendor/
+/CLAUDE.md
