@@ -11,12 +11,6 @@ describe 'Long documents and caching' do
 
   before { Rails.cache.clear }
 
-  def document_xml(docx)
-    xml = nil
-    Zip::File.open_buffer(StringIO.new(docx)) { |zip| xml = zip.read('word/document.xml') }
-    xml.force_encoding(Encoding::UTF_8)
-  end
-
   #--------------------------------------------------------
   # Conditional GET and Rails.cache
   #--------------------------------------------------------
@@ -28,10 +22,9 @@ describe 'Long documents and caching' do
       get "/reports/#{report.id}.docx"
 
       expect(response).to have_http_status(:ok)
-      expect(response.media_type).to eq docx
-      expect(response.headers['Content-Disposition']).to include %Q{filename="report-#{report.id}.docx"}
+      expect(response).to be_docx.named("report-#{report.id}.docx")
       expect(response.headers['ETag']).to be_present
-      expect(document_xml(response.body)).to include 'Quarterly Report', 'Last changed on'
+      expect(docx_text(response.body)).to include 'Quarterly Report', 'Last changed on'
     end
 
     it 'answers a matching If-None-Match with 304 and renders nothing' do
@@ -77,7 +70,7 @@ describe 'Long documents and caching' do
 
       expect(response).to have_http_status(:ok)
       expect(response.headers['ETag']).not_to eq english_etag
-      expect(document_xml(response.body)).to include 'Zuletzt geändert am'
+      expect(docx_text(response.body)).to include 'Zuletzt geändert am'
       expect(Caracal::Document).to have_received(:render).twice
     end
 
@@ -109,7 +102,7 @@ describe 'Long documents and caching' do
       expect(document).to be_attached
       expect(document.filename.to_s).to eq "report-#{report.id}.docx"
       expect(document.content_type).to eq docx
-      expect(document_xml(document.download)).to include 'Quarterly Report'
+      expect(docx_text(document.download)).to include 'Quarterly Report'
     end
 
     it 'mails a link to the document' do

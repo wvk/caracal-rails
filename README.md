@@ -160,6 +160,51 @@ A document served directly gets its ETag and its cache key from what goes into i
 [caracal-md](https://github.com/wvk/caracal-md) runs an external program for each diagram block it renders. Keeping those results in `Rails.cache` across renders is the subject of [#5](https://github.com/wvk/caracal-rails/issues/5) and [wvk/caracal-md#11](https://github.com/wvk/caracal-md/issues/11).
 
 
+## Testing
+
+Caracal-Rails brings matchers and assertions for DOCX responses. Require them in `spec/rails_helper.rb` or `test/test_helper.rb`:
+
+    require 'caracal/rails/test_helpers'
+
+This includes `Caracal::Rails::TestHelpers` in every RSpec example group and in `ActiveSupport::TestCase`, the base class of Rails' integration, controller, mailer and job tests. Other test classes take them with `include Caracal::Rails::TestHelpers`.
+
+A request spec for the `ReportsController` above:
+
+    RSpec.describe 'Reports', type: :request do
+      let(:report) { Report.create!(title: 'Quarterly Report') }
+
+      it 'sends the report as a DOCX' do
+        get "/reports/#{report.id}.docx"
+
+        expect(response).to be_docx.named("report-#{report.id}.docx")
+        expect(docx_paragraphs(response.body)).to include ['Heading1', 'Quarterly Report']
+        expect(docx_text(response.body)).to include 'Last changed on'
+      end
+    end
+
+The same in a Minitest integration test:
+
+    class ReportsTest < ActionDispatch::IntegrationTest
+      test 'sends the report as a DOCX' do
+        report = Report.create!(title: 'Quarterly Report')
+        get "/reports/#{report.id}.docx"
+
+        assert_docx response, filename: "report-#{report.id}.docx"
+        assert_includes docx_text(response.body), 'Quarterly Report'
+      end
+    end
+
+- `be_docx` and `assert_docx response` pass for a response with the media type `application/vnd.openxmlformats-officedocument.wordprocessingml.document` whose body is a ZIP archive holding `word/document.xml`. Given a String, such as the result of `ReportsController.render` or of `document.download`, they check the archive.
+- `be_docx.named(name)` and `assert_docx response, filename: name` also compare the file name in the response's `Content-Disposition`. For a name outside ASCII, `send_data docx, filename: 'Bericht März.docx'` writes `filename="Bericht Marz.docx"; filename*=UTF-8''Bericht%20M%C3%A4rz.docx` (RFC 6266). The helpers read `filename*` first, so `expect(response).to be_docx.named('Bericht März.docx')` passes.
+- A failure names what the helpers found, e.g.
+
+      expected a DOCX named "report.docx", but the file name is "report-1.docx" (Content-Disposition: attachment; filename="report-1.docx"; filename*=UTF-8''report-1.docx)
+
+- `docx_paragraphs` returns the paragraphs of the document body as pairs of style id and text: `['Heading1', 'Quarterly Report']` for `docx.h1 'Quarterly Report'`, `['Normal', 'Lorem ipsum']` for `docx.p 'Lorem ipsum'`. It includes the paragraphs in tables and frames. A line break reads as `"\n"` and a tab as `"\t"`. A paragraph without a style of its own, such as the one holding a page break, has the style id `nil`.
+- `docx_text` joins the texts of those paragraphs with `"\n"`.
+- Both take a response or a String and read `word/document.xml`; headers, footers and footnotes are parts of their own. For a body that is no DOCX they raise an `ArgumentError`.
+
+
 ## Contributing
 
 1. Fork it ( https://github.com/wvk/caracal-rails/fork )

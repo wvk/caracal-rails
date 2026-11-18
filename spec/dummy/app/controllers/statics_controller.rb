@@ -1,3 +1,5 @@
 class StaticsController < ApplicationController
-  def index; end
+  def show
+    send_data render_to_string, type: :docx, filename: 'Bericht März.docx'
+  end
 end
