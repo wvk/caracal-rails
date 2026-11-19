@@ -11,10 +11,18 @@ module Caracal
       end
     end
 
-    # Prepended to ActionView::Base. While a .docx.caracal view renders,
+    # Prepended to ActionView::Base. In a .docx.caracal view or partial,
     # cache, cache_if, cache_unless and render with cached: true raise a
     # FragmentCachingError, also with perform_caching off, so the mistake
-    # shows on the first render. Views of other formats cache as before.
+    # shows on the first render.
+    #
+    # The guard asks which template is running: @current_template, which
+    # Rails sets around every template and which its cache helper reads too.
+    # An ERB partial rendered from a .docx.caracal view therefore caches as
+    # before, since its fragment is its output, and so do views of other
+    # formats. Other libraries keep objects of their own in
+    # @current_template (ViewComponent a ViewComponent::Template), so the
+    # guard asks for the handler only where there is one.
     #
     module FragmentCachingGuard
       def cache(...)
@@ -40,7 +48,8 @@ module Caracal
       private
 
       def _caracal_refuse_fragment_caching(helper)
-        raise FragmentCachingError, helper if @_caracal_docx
+        template = @current_template
+        raise FragmentCachingError, helper if template.respond_to?(:handler) and template.handler == TemplateHandler
       end
     end
 

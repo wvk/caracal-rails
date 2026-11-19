@@ -148,7 +148,14 @@ describe Caracal::Rails::TemplateHandler do
             'reports/uncached_clients.docx.caracal'  => "render partial: 'clients/summary', collection: clients, as: :client, cached: false",
             'reports/cache_in_partial.docx.caracal'  => "docx.h1 'Clients'\nrender 'reports/cached_intro'",
             'reports/_cached_intro.docx.caracal'     => "cache('clients/intro') { docx.p 'Our clients by city' }",
-            'reports/greeting.html.erb'              => "<% cache('greeting', skip_digest: true) do %>Hello <%= name %><% end %>"
+            'reports/greeting.html.erb'              => "<% cache('greeting', skip_digest: true) do %>Hello <%= name %><% end %>",
+            'reports/with_greeting.docx.caracal'     => "docx.p render(partial: 'reports/greeting', formats: [:html], locals: { name: name })",
+            'reports/_greeting.html.erb'             => "<% cache('greeting', skip_digest: true) do %>Hello <%= name %><% end %>",
+            'reports/with_lines.docx.caracal'        => "docx.p render(partial: 'reports/lines', formats: [:html], locals: { clients: clients, year: year })",
+            'reports/_lines.html.erb'                => "<%= render partial: 'reports/line', collection: clients, as: :client, cached: true, locals: { year: year } %>",
+            'reports/_line.html.erb'                 => "<%= client.name %> <%= year %>;",
+            'reports/cache_in_layout_block.docx.caracal' => "render(layout: 'reports/box') { cache('clients/intro') { docx.p 'Our clients by city' } }",
+            'reports/_box.docx.caracal'              => "docx.p 'Top'\nyield"
           )
         end
 
@@ -195,10 +202,46 @@ describe Caracal::Rails::TemplateHandler do
               expect { render_docx('reports/cache_in_partial') }.to raise_fragment_caching_error('cache')
             end
 
+            it 'raises for a cache block in the block of render(layout:)' do
+              expect { render_docx('reports/cache_in_layout_block') }.to raise_fragment_caching_error('cache')
+            end
+
             it 'renders a collection with cached: false' do
               expect(docx_text(render_docx('reports/uncached_clients', locals: { clients: clients }))).to eq "ACME GmbH\nKiel\nBeta AG\nHamburg"
             end
           end
+        end
+
+        # The fragment of an ERB partial is its output, so its cache holds
+        # the text the view asks for. The second render shows the hit: it
+        # holds the name or the year of the first.
+        describe 'in an ERB partial rendered from a view, with perform_caching on' do
+          around do |example|
+            previous = ActionController::Base.perform_caching
+            ActionController::Base.perform_caching = true
+            example.run
+          ensure
+            ActionController::Base.perform_caching = previous
+          end
+
+          it 'caches a cache block' do
+            expect(docx_text(render_docx('reports/with_greeting', locals: { name: 'Anna' }))).to eq 'Hello Anna'
+            expect(docx_text(render_docx('reports/with_greeting', locals: { name: 'Ben' }))).to eq 'Hello Anna'
+          end
+
+          it 'caches a collection rendered with cached: true' do
+            expect(docx_text(render_docx('reports/with_lines', locals: { clients: clients, year: 2025 }))).to eq 'ACME GmbH 2025;Beta AG 2025;'
+            expect(docx_text(render_docx('reports/with_lines', locals: { clients: clients, year: 2026 }))).to eq 'ACME GmbH 2025;Beta AG 2025;'
+          end
+        end
+
+        # ViewComponent keeps a ViewComponent::Template in @current_template
+        # while a component renders, an object without a handler.
+        it 'passes cache on to Rails where the current template is an object of another library' do
+          view = ApplicationController.new.view_context
+          view.instance_variable_set(:@current_template, Struct.new(:virtual_path).new('components/card'))
+
+          expect { |block| view.cache('card', skip_digest: true, &block) }.to yield_control
         end
 
         it 'renders the next view after the error into a document of its own' do
