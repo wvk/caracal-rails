@@ -1,5 +1,6 @@
 require 'caracal'
 require 'caracal/rails/document_wrapper'
+require 'caracal/rails/fragment_caching_guard'
 require 'caracal/rails/template_handler'
 require 'caracal/rails/version'
 require 'tilt'
@@ -22,6 +23,7 @@ module Caracal
 
         ActiveSupport.on_load(:action_view) do
           ActionView::Template.register_template_handler :caracal, Caracal::Rails::TemplateHandler
+          ActionView::Base.prepend Caracal::Rails::FragmentCachingGuard
 
           # A view's digest, which goes into ETags and cache keys, covers the
           # partials that the dependency tracker of its handler finds. Rails'

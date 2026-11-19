@@ -133,35 +133,90 @@ describe Caracal::Rails::TemplateHandler do
         end
       end
 
-      # reports/cached.docx.caracal has a cache block and a collection
-      # rendered with cached: true. The test environment turns caching off,
-      # and Rails.cache, a memory store, holds the fragments.
-      describe 'with fragment caching on' do
+      # clients/_summary.docx.caracal is the dummy app's. The test
+      # environment turns caching off, and Rails.cache, a memory store, holds
+      # the fragments.
+      describe 'with fragment caching' do
         let(:client)  { Struct.new(:name, :city) }
         let(:clients) { [client.new('ACME GmbH', 'Kiel'), client.new('Beta AG', 'Hamburg')] }
+        let(:resolver) do
+          ActionView::FixtureResolver.new(
+            'reports/cache_block.docx.caracal'       => "docx.h1 'Clients'\ncache('clients/intro') { docx.p 'Our clients by city' }",
+            'reports/cache_if.docx.caracal'          => "cache_if(false, 'clients/intro') { docx.p 'Our clients by city' }",
+            'reports/cache_unless.docx.caracal'      => "cache_unless(true, 'clients/intro') { docx.p 'Our clients by city' }",
+            'reports/cached_clients.docx.caracal'    => "render partial: 'clients/summary', collection: clients, as: :client, cached: true",
+            'reports/uncached_clients.docx.caracal'  => "render partial: 'clients/summary', collection: clients, as: :client, cached: false",
+            'reports/cache_in_partial.docx.caracal'  => "docx.h1 'Clients'\nrender 'reports/cached_intro'",
+            'reports/_cached_intro.docx.caracal'     => "cache('clients/intro') { docx.p 'Our clients by city' }",
+            'reports/greeting.html.erb'              => "<% cache('greeting', skip_digest: true) do %>Hello <%= name %><% end %>"
+          )
+        end
 
         around do |example|
-          perform_caching = ActionController::Base.perform_caching
-          ActionController::Base.perform_caching = true
+          view_paths = ApplicationController.view_paths
+          ApplicationController.prepend_view_path(resolver)
           Rails.cache.clear
           example.run
         ensure
-          ActionController::Base.perform_caching = perform_caching
+          ApplicationController.view_paths = view_paths
           Rails.cache.clear
         end
 
-        it 'adds the commands of cache blocks and cached collections on a miss, and skips them on a hit' do
-          first  = render_docx('reports/cached', locals: { clients: clients })
-          second = render_docx('reports/cached', locals: { clients: clients })
+        def raise_fragment_caching_error(helper)
+          raise_error(ActionView::Template::Error, start_with("#{ helper } in a .docx.caracal view")) { |error|
+            expect(error.cause).to be_a Caracal::Rails::FragmentCachingError
+          }
+        end
 
-          expect(docx_paragraphs(first)).to eq [
-            ['Heading1', 'Clients'],
-            ['Normal',   'Our clients by city'],
-            ['Heading2', 'ACME GmbH'], ['Normal', 'Kiel'],
-            ['Heading2', 'Beta AG'],   ['Normal', 'Hamburg'],
-            ['Normal',   'End of list']
-          ]
-          expect(docx_paragraphs(second)).to eq [['Heading1', 'Clients'], ['Normal', 'End of list']]
+        [true, false].each do |perform_caching|
+          describe "with perform_caching #{ perform_caching }" do
+            around do |example|
+              previous = ActionController::Base.perform_caching
+              ActionController::Base.perform_caching = perform_caching
+              example.run
+            ensure
+              ActionController::Base.perform_caching = previous
+            end
+
+            it 'raises for a cache block' do
+              expect { render_docx('reports/cache_block') }.to raise_fragment_caching_error('cache')
+            end
+
+            it 'raises for cache_if and cache_unless, whatever their condition' do
+              expect { render_docx('reports/cache_if') }.to raise_fragment_caching_error('cache_if')
+              expect { render_docx('reports/cache_unless') }.to raise_fragment_caching_error('cache_unless')
+            end
+
+            it 'raises for a collection rendered with cached: true' do
+              expect { render_docx('reports/cached_clients', locals: { clients: clients }) }.to raise_fragment_caching_error('render cached: true')
+            end
+
+            it 'raises for a cache block in a partial' do
+              expect { render_docx('reports/cache_in_partial') }.to raise_fragment_caching_error('cache')
+            end
+
+            it 'renders a collection with cached: false' do
+              expect(docx_text(render_docx('reports/uncached_clients', locals: { clients: clients }))).to eq "ACME GmbH\nKiel\nBeta AG\nHamburg"
+            end
+          end
+        end
+
+        it 'renders the next view after the error into a document of its own' do
+          view = ApplicationController.new.view_context
+
+          expect { view.render(template: 'reports/cache_block', formats: [:docx]) }.to raise_fragment_caching_error('cache')
+          expect(docx_text(view.render(template: 'reports/outer', formats: [:docx]))).to eq "Outer\nInner\npartial returned String of 0 bytes"
+        end
+
+        it 'leaves fragment caching in views of other formats as it is' do
+          perform_caching = ActionController::Base.perform_caching
+          ActionController::Base.perform_caching = true
+          view = ApplicationController.new.view_context
+
+          expect(view.render(template: 'reports/greeting', formats: [:html], locals: { name: 'Anna' })).to eq 'Hello Anna'
+          expect(view.render(template: 'reports/greeting', formats: [:html], locals: { name: 'Ben' })).to eq 'Hello Anna'
+        ensure
+          ActionController::Base.perform_caching = perform_caching
         end
       end
 
