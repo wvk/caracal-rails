@@ -1,0 +1,4 @@
+docx.h1 'Clients'
+cache('clients/intro') { docx.p 'Our clients by city' }
+render partial: 'clients/summary', collection: clients, as: :client, cached: true
+docx.p 'End of list'

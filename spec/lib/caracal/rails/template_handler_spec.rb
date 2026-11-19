@@ -133,6 +133,38 @@ describe Caracal::Rails::TemplateHandler do
         end
       end
 
+      # reports/cached.docx.caracal has a cache block and a collection
+      # rendered with cached: true. The test environment turns caching off,
+      # and Rails.cache, a memory store, holds the fragments.
+      describe 'with fragment caching on' do
+        let(:client)  { Struct.new(:name, :city) }
+        let(:clients) { [client.new('ACME GmbH', 'Kiel'), client.new('Beta AG', 'Hamburg')] }
+
+        around do |example|
+          perform_caching = ActionController::Base.perform_caching
+          ActionController::Base.perform_caching = true
+          Rails.cache.clear
+          example.run
+        ensure
+          ActionController::Base.perform_caching = perform_caching
+          Rails.cache.clear
+        end
+
+        it 'adds the commands of cache blocks and cached collections on a miss, and skips them on a hit' do
+          first  = render_docx('reports/cached', locals: { clients: clients })
+          second = render_docx('reports/cached', locals: { clients: clients })
+
+          expect(docx_paragraphs(first)).to eq [
+            ['Heading1', 'Clients'],
+            ['Normal',   'Our clients by city'],
+            ['Heading2', 'ACME GmbH'], ['Normal', 'Kiel'],
+            ['Heading2', 'Beta AG'],   ['Normal', 'Hamburg'],
+            ['Normal',   'End of list']
+          ]
+          expect(docx_paragraphs(second)).to eq [['Heading1', 'Clients'], ['Normal', 'End of list']]
+        end
+      end
+
       # reports/_inner.docx.caracal is the dummy app's.
       describe 'with a layout around a partial or a block' do
         let(:resolver) do
