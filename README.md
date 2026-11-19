@@ -212,6 +212,7 @@ A document served directly gets its ETag and its cache key from what goes into i
       # Template Dependency: charts/bar
       # Template Dependency: charts/pie
 
+- Rails looks up each of these as a partial in the request's format. A template rendered with `render template:` and a partial of another format, such as `docx.p render('reports/note', formats: [:text])`, stay outside the digest, with or without a comment. Move what they render into a `docx` partial, and the ETag and the cache key follow it.
 - Last-Modified carries the record's time alone. A client that revalidates by date only (`If-Modified-Since` without `If-None-Match`) receives `304` across a change of template or locale; browsers send both headers, and Rails then compares both. `stale?(etag: @report)` sends the ETag without Last-Modified.
 - A changed record, template or partial gives a new key, and the old entry leaves the cache under the store's expiry policy. Documents of several megabytes need a cache store that holds entries of that size; Memcached's default item limit is 1 MB.
 

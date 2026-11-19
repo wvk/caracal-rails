@@ -141,6 +141,23 @@ describe Caracal::Rails::Railtie do
 
         expect { write 'charts/_bar.docx.caracal', "docx.p 'Stacked bar chart'\n" }.to change { digest('offers/show') }
       end
+
+      # Rails looks up each dependency as a partial in the format of the
+      # lookup, for ERB views too. The README names the two cases below; an
+      # example that fails here shows that a Rails version covers its case.
+      it 'stays the same with a template rendered with render template:, also when a comment names it' do
+        write 'offers/show.docx.caracal', "docx.h1 'Offer'\nrender template: 'offers/terms'\n# Template Dependency: offers/terms\n"
+        write 'offers/terms.docx.caracal', "docx.p 'Payable within 30 days'\n"
+
+        expect { write 'offers/terms.docx.caracal', "docx.p 'Payable within 14 days'\n" }.not_to change { digest('offers/show') }
+      end
+
+      it 'stays the same with a partial of another format, also when a comment names it' do
+        write 'offers/show.docx.caracal', "docx.p render('offers/terms', formats: [:text])\n# Template Dependency: offers/terms\n"
+        write 'offers/_terms.text.erb', "Payable within 30 days\n"
+
+        expect { write 'offers/_terms.text.erb', "Payable within 14 days\n" }.not_to change { digest('offers/show') }
+      end
     end
   end
   
