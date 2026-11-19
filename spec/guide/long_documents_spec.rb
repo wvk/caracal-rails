@@ -84,6 +84,49 @@ describe 'Long documents and caching' do
 
       expect(response).to have_http_status(:not_modified)
     end
+
+    # The example copies the dummy app's reports/show.docx.caracal into a view
+    # path in front of app/views, has the copy render a partial and changes
+    # the partial. Each change clears Rails' caches of templates and digests,
+    # as a deployment does.
+    describe 'when a partial of the view changes' do
+      let(:views) { Pathname(Dir.mktmpdir('views-', Rails.root.join('tmp').tap(&:mkpath).to_s)) }
+
+      around do |example|
+        view_paths = ApplicationController.view_paths
+        ApplicationController.prepend_view_path(views.to_s)
+        example.run
+      ensure
+        ApplicationController.view_paths = view_paths
+        FileUtils.rm_rf(views)
+        ActionView::LookupContext::DetailsKey.clear
+      end
+
+      def deploy(signature)
+        views.join('reports/_signature.docx.caracal').write("docx.p #{ signature.inspect }\n")
+        ActionView::LookupContext::DetailsKey.clear
+      end
+
+      before do
+        views.join('reports').mkpath
+        views.join('reports/show.docx.caracal').write(Rails.root.join('app/views/reports/show.docx.caracal').read + "render 'reports/signature'\n")
+        deploy 'Signed by Anna'
+      end
+
+      it 'renders again and answers with a new ETag' do
+        get "/reports/#{report.id}.docx"
+        first_etag = response.headers['ETag']
+        expect(docx_text(response.body)).to include 'Quarterly Report', 'Signed by Anna'
+
+        deploy 'Signed by Ben'
+        get "/reports/#{report.id}.docx", headers: { 'If-None-Match' => first_etag }
+
+        expect(response).to have_http_status(:ok)
+        expect(response.headers['ETag']).not_to eq first_etag
+        expect(docx_text(response.body)).to include 'Quarterly Report', 'Signed by Ben'
+        expect(Caracal::Document).to have_received(:render).twice
+      end
+    end
   end
 
   #--------------------------------------------------------

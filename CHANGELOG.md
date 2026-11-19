@@ -6,6 +6,7 @@
 
 * Bug Fixes
   * The template handler compiles a view from the source Rails passes it, wrapped in `Caracal::Document.render do |docx|` as `Tilt::CaracalTemplate` wraps it, where it compiled to `Tilt.new(path).render(self)`. Views now read the `locals:` passed to `render` and render from resolvers other than the file system, such as `ActionView::FixtureResolver`. Rails compiles a view once and renders it again without reading its file, where Tilt read and compiled the file on every render. An error on line N of a view reports line N, where Tilt reported N + 1. The template path no longer appears in the generated code. (@wvk)
+  * The digest of a view covers the partials it renders, where it covered the view's own file alone. The Railtie registers Rails' dependency tracker for Ruby code, `RubyTracker` (`RipperTracker` in Rails 7.1), for `.caracal` views. After a deployment that changes a partial, `stale?` sets a new ETag, and a cache key built with `ActionView::Digestor` changes. A partial whose name is built at run time goes into the digest through a `# Template Dependency: dir/name` comment. The README's section "Conditional requests and `Rails.cache`" describes what the digest covers. (@wvk)
 
 * Enhancements
   * Continuous integration runs Ruby 3.2 to 4.0 against Rails 7.1 to 8.1. (@wvk)
