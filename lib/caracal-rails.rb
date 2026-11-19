@@ -22,6 +22,16 @@ module Caracal
 
         ActiveSupport.on_load(:action_view) do
           ActionView::Template.register_template_handler :caracal, Caracal::Rails::TemplateHandler
+
+          # A view's digest, which goes into ETags and cache keys, covers the
+          # partials that the dependency tracker of its handler finds. Rails'
+          # tracker for Ruby code reads the render calls in the code that
+          # TemplateHandler.call returns. It is RubyTracker from Rails 7.2 on
+          # and RipperTracker in Rails 7.1, which loads the trackers along
+          # with ActionView::Digestor.
+          require 'action_view/dependency_tracker'
+          tracker = ActionView::DependencyTracker.const_defined?(:RubyTracker, false) ? :RubyTracker : :RipperTracker
+          ActionView::DependencyTracker.register_tracker :caracal, ActionView::DependencyTracker.const_get(tracker, false)
         end
 
         # render docx: 'show', filename: 'Bericht März.docx', disposition: :inline
